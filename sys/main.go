@@ -3,8 +3,8 @@ package main
 import (
 	logging "github.com/ipfs/go-log/v2"
 
-	Bridge "gitlab.com/slatersys/slater/bridge"
-	Core "gitlab.com/slatersys/slater/core"
+	Bridge "github.com/yeahcorey/slater/bridge"
+	Core "github.com/yeahcorey/slater/core"
 )
 
 var log = logging.Logger("slater")
