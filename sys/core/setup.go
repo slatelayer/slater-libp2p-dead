@@ -5,7 +5,7 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"github.com/fxamacker/cbor/v2"
-	"github.com/libp2p/go-libp2p-core/peer"
+	_peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-pubsub"
 	"golang.org/x/exp/slices"
 	"strings"
@@ -27,7 +27,7 @@ func wait() {
 	<-time.After(time.Duration(d) * time.Second)
 }
 
-func runSetup(core *Core, feed slate) (datastore, node) {
+func runSetup(core *Core, feed slate) (datastore, *node) {
 	text := func(body string) {
 		feed.write(message{
 			"slate":  "setup",
@@ -52,7 +52,7 @@ func runSetup(core *Core, feed slate) (datastore, node) {
 
 	text("# Hello!")
 
-	stores, err := findStores()
+	stores, err := findStores(core.root)
 	if err != nil {
 		log.Fatal("serious problem with disk access")
 	}
@@ -237,10 +237,10 @@ func affirmSecret(feed slate, evt string, body string, secret string, choices ..
 	return out
 }
 
-func completeSetup(core *Core, name, passphrase, pin string) (datastore, node) {
-	key := createMasterKey(name, passphrase, pin)
+func completeSetup(core *Core, name, passphrase, pin string) (datastore, *node) {
+	key := createMasterKey(core.root, name, passphrase, pin)
 
-	store, err := openStore(name, key)
+	store, err := openStore(core.root, name, key)
 
 	if err != nil {
 		log.Panic(err)
@@ -270,35 +270,39 @@ func completeSetup(core *Core, name, passphrase, pin string) (datastore, node) {
 
 	connect(core, store, peer, name, passphrase, pin)
 
+	log.Debugf("discoverykey: %v, signet: %v", peer.discoveryKey, peer.signet)
+
 	return store, peer
 }
 
-func connect(core *Core, store datastore, host node, sessionName, passphrase, pin string) {
+func connect(core *Core, store datastore, peer *node, sessionName, passphrase, pin string) {
 	devicesBytes, err := store.get(DEVICESKEY)
 	if err != nil {
 		if !errors.Is(err, ErrNotFound) {
 			log.Panic(err)
 		}
-	}
-
-	err = cbor.Unmarshal(devicesBytes, &core.devices)
-	if err != nil {
-		log.Panic(err)
+	} else {
+		err = cbor.Unmarshal(devicesBytes, &core.devices)
+		if err != nil {
+			log.Panic(err)
+		}
 	}
 
 	discoKey := discoveryKey(sessionName, passphrase, pin)
+	peer.discoveryKey = discoKey
+
 	signKey, err := deriveSignatureKey(sessionName, passphrase, pin)
 	if err != nil {
 		log.Panic(err)
 	}
 
-	host.discoveryKey = discoKey
-	host.signet = ed25519.Sign(signKey, []byte(host.host.ID().String()))
+	signet := ed25519.Sign(signKey, []byte(peer.host.ID().String()))
+	peer.signet = signet
 
-	validator := func(ctx context.Context, pid peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
+	validator := func(ctx context.Context, pid _peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
 		p := pid.String()
 
-		if p == host.host.ID().String() {
+		if p == peer.host.ID().String() {
 			return pubsub.ValidationAccept
 		}
 
@@ -332,15 +336,17 @@ func connect(core *Core, store datastore, host node, sessionName, passphrase, pi
 		return pubsub.ValidationReject
 	}
 
-	host.join(discoKey, validator)
+	peer.join(peer.discoveryKey, validator)
 
 	go func() {
 		for {
-			peers := host.psub.ListPeers(discoKey)
+			peers := peer.psub.ListPeers(peer.discoveryKey)
 			count := len(peers)
 			if count > 0 {
-				host.send(discoKey, message{
-					"signet": host.signet,
+				peer.send(peer.discoveryKey, message{
+					"slate":  "setup",
+					"kind":   "signet",
+					"signet": peer.signet,
 				})
 				return
 				// ...or should we continue sending periodically? 🤔...

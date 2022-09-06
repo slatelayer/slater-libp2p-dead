@@ -10,8 +10,7 @@ import (
 )
 
 const (
-	ROOT           = ".slater"
-	SESSIONS       = "data"
+	DB             = "db"
 	KEYBYTES       = 64
 	KEYKEY         = "k"
 	DEVICESKEY     = "d"
@@ -19,8 +18,6 @@ const (
 )
 
 var (
-	home        string
-	storePath   string
 	ErrNotFound error           = ds.ErrNotFound
 	whatever    context.Context = context.TODO()
 )
@@ -29,30 +26,10 @@ type datastore struct {
 	store *badger.Datastore
 }
 
-func init() {
-	root := ROOT
-
-	if len(os.Args) > 1 {
-		alt := os.Args[1] // alternate root, to run 2 instances for testing
-		if alt != "" {
-			root = alt
-		}
-	}
-
-	home, _ = os.UserHomeDir()
-	storePath = filepath.Join(home, root, SESSIONS)
-
-	log.Debug("STORE PATH:", storePath)
-}
-
-func findStores() ([]string, error) {
+func findStores(rootPath string) ([]string, error) {
 	var stores []string
 
-	if err := os.MkdirAll(storePath, 0700); err != nil {
-		return stores, err
-	}
-
-	dir, err := os.Open(storePath)
+	dir, err := os.Open(rootPath)
 	if err != nil {
 		return stores, err
 	}
@@ -65,8 +42,8 @@ func findStores() ([]string, error) {
 	return stores, nil
 }
 
-func openStore(name string, key string) (datastore, error) {
-	path := filepath.Join(storePath, name)
+func openStore(rootPath, name string, key string) (datastore, error) {
+	path := filepath.Join(rootPath, name, DB)
 
 	opts := badger.DefaultOptions
 	opts.WithIndexCacheSize(INDEXCACHESIZE)
@@ -82,7 +59,8 @@ func openStore(name string, key string) (datastore, error) {
 	return datastore{store}, nil
 }
 
-func deleteStore(name string) {
+func deleteStore(rootPath, name string) {
+	storePath := filepath.Join(rootPath, name, DB)
 	path := filepath.Join(storePath, name)
 	err := os.RemoveAll(path)
 	if err != nil {
@@ -98,8 +76,8 @@ func (s datastore) put(k string, v []byte) error {
 func (s datastore) get(key string) (value []byte, err error) {
 	k := ds.NewKey(key)
 	value, err = s.store.Get(whatever, k)
-	if err != nil {
-		log.Debugf("%s: %s", k, err)
-	}
+	//if err != nil {
+	//	log.Debugf("%s: %s", k, err)
+	//}
 	return
 }

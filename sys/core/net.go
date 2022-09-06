@@ -25,7 +25,7 @@ import (
 	tcp "github.com/libp2p/go-libp2p/p2p/transport/tcp"
 )
 
-const DiscoveryServiceTag = "slater"
+const DiscoveryServiceTag = "slater" // TODO version
 
 type node struct {
 	host     host.Host
@@ -48,7 +48,7 @@ func (n node) close() error {
 	return n.host.Close()
 }
 
-func startNet(key crypto.PrivKey, store datastore) (n node, err error) {
+func startNet(key crypto.PrivKey, store datastore) (*node, error) {
 	background := context.Background()
 	var ddht *dual.DHT
 	connectionManager, err := connmgr.NewConnManager(
@@ -58,7 +58,7 @@ func startNet(key crypto.PrivKey, store datastore) (n node, err error) {
 	)
 
 	if err != nil {
-		return n, err
+		return nil, err
 	}
 
 	logging.SetAllLoggers(logging.LevelWarn)
@@ -79,7 +79,6 @@ func startNet(key crypto.PrivKey, store datastore) (n node, err error) {
 		libp2p.ListenAddrStrings(
 			"/ip4/0.0.0.0/tcp/0",
 			"/ip4/0.0.0.0/udp/0/quic",
-			"/ip4/127.0.0.1/tcp/0",
 		),
 		libp2p.Security(noise.ID, noise.New),
 		libp2p.ChainOptions(
@@ -98,7 +97,7 @@ func startNet(key crypto.PrivKey, store datastore) (n node, err error) {
 		libp2p.EnableHolePunching(),
 	)
 	if err != nil {
-		return n, err
+		return nil, err
 	}
 
 	psub, err := pubsub.NewGossipSub(
@@ -109,22 +108,25 @@ func startNet(key crypto.PrivKey, store datastore) (n node, err error) {
 		pubsub.WithDiscovery(discoveryRouting.NewRoutingDiscovery(ddht)),
 	)
 	if err != nil {
-		return n, err
+		return nil, err
 	}
 
-	n.host = host
-	n.dht = ddht
-	n.psub = psub
-	n.ctx = background
-	n.channels = make(map[string]channel)
+	n := node{
+		host:     host,
+		dht:      ddht,
+		psub:     psub,
+		ctx:      background,
+		channels: make(map[string]channel),
+		output:   make(chan message),
+	}
 
 	n.bootstrap(bootstrapNodes)
 
-	if err := runMdns(n); err != nil {
-		return n, err
+	if err := runMdns(&n); err != nil {
+		return nil, err
 	}
 
-	return
+	return &n, nil
 }
 
 func newDHT(ctx context.Context, host host.Host, store ds.Batching, bootstrapNodes []peer.AddrInfo) (*dual.DHT, error) {
@@ -138,7 +140,7 @@ func newDHT(ctx context.Context, host host.Host, store ds.Batching, bootstrapNod
 	return dual.New(ctx, host, dhtOpts...)
 }
 
-func (n node) bootstrap(peers []peer.AddrInfo) {
+func (n *node) bootstrap(peers []peer.AddrInfo) {
 	connected := make(chan struct{})
 
 	var wg sync.WaitGroup
@@ -183,7 +185,6 @@ type discoveryNotifee struct {
 
 func (n *discoveryNotifee) HandlePeerFound(pi peer.AddrInfo) {
 	if pi.ID.String() == n.h.ID().String() {
-		log.Debug("ignoring self")
 		return
 	}
 	log.Infof("discovered new peer %s\n", pi.ID.Pretty())
@@ -195,12 +196,12 @@ func (n *discoveryNotifee) HandlePeerFound(pi peer.AddrInfo) {
 	log.Infof("Connected to %s", pi.ID.Pretty())
 }
 
-func runMdns(n node) error {
+func runMdns(n *node) error {
 	s := mdns.NewMdnsService(n.host, DiscoveryServiceTag, &discoveryNotifee{n.host})
 	return s.Start()
 }
 
-func (n node) join(k string, f pubsub.ValidatorEx) {
+func (n *node) join(k string, f pubsub.ValidatorEx) {
 	n.psub.RegisterTopicValidator(k, f)
 
 	topic, err := n.psub.Join(k)
@@ -218,7 +219,7 @@ func (n node) join(k string, f pubsub.ValidatorEx) {
 	go run(n, sub)
 }
 
-func (n node) send(topic string, msg message) {
+func (n *node) send(topic string, msg message) {
 	bytes, err := encode(msg)
 	if err != nil {
 		log.Error(err)
@@ -228,7 +229,7 @@ func (n node) send(topic string, msg message) {
 	n.channels[topic].topic.Publish(n.ctx, bytes)
 }
 
-func run(n node, sub *pubsub.Subscription) {
+func run(n *node, sub *pubsub.Subscription) {
 	for {
 		msg, err := sub.Next(n.ctx)
 
@@ -237,8 +238,6 @@ func run(n node, sub *pubsub.Subscription) {
 			delete(n.channels, sub.Topic())
 			return
 		}
-
-		log.Debugf("message: %v", msg)
 
 		if msg.ReceivedFrom == n.host.ID() {
 			continue
@@ -250,8 +249,7 @@ func run(n node, sub *pubsub.Subscription) {
 			continue
 		}
 
-		//m["slate"] = sub.Topic()
-		log.Debug("NET", m)
+		m["device"] = msg.ReceivedFrom.Pretty()
 
 		n.output <- m
 	}

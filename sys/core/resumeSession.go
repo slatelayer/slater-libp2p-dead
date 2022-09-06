@@ -5,7 +5,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/crypto"
 )
 
-func resumeSession(core *Core, feed slate, say func(...string), sessions []string) (datastore, node) {
+func resumeSession(core *Core, feed slate, say func(...string), sessions []string) (datastore, *node) {
 	createNew := "Create a New Session"
 	choices := append(sessions, createNew)
 	sessionName := <-chooseSession(feed, choices)
@@ -21,7 +21,7 @@ func resumeSession(core *Core, feed slate, say func(...string), sessions []strin
 		passphrase = <-promptPassphrase(feed)
 		pin = <-promptPIN(feed)
 
-		key, err := getMasterKey(sessionName, passphrase, pin)
+		key, err := getMasterKey(core.root, sessionName, passphrase, pin)
 		if err != nil {
 			if errors.Is(err, errAuthFail) {
 				say("😬 I could not confirm those credentials.")
@@ -41,12 +41,12 @@ func resumeSession(core *Core, feed slate, say func(...string), sessions []strin
 			say("Please don't delete my files. I hope you have a full replica of your data on another device!")
 			say("If so, please make sure it's online and running session " + sessionName)
 
-			deleteStore(sessionName)
+			deleteStore(core.root, sessionName)
 
-			key = createMasterKey(sessionName, passphrase, pin)
+			key = createMasterKey(core.root, sessionName, passphrase, pin)
 		}
 
-		store, err = openStore(sessionName, key)
+		store, err = openStore(core.root, sessionName, key)
 
 		if err != nil {
 			if len(sessions) > 1 {
@@ -104,7 +104,7 @@ func promptPassphrase(feed slate) chan string {
 }
 
 func promptPIN(feed slate) chan string {
-	return promptSecret(feed, "setup:pin", "Enter your pin")
+	return promptSecret(feed, "setup:pin", "Enter your PIN")
 }
 
 func chooseAnotherSession(feed slate) chan bool {

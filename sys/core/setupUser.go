@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-func setupUser(core *Core, feed slate, say func(...string)) (datastore, node) {
+func setupUser(core *Core, feed slate, say func(...string)) (datastore, *node) {
 	say("Alright, I will create new random credentials, and I need you to **write them down** and *put them in your wallet*.\n",
 		"So get ready to write, and make sure nobody else is looking at your screen!",
 	)

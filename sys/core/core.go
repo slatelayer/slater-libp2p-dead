@@ -2,27 +2,34 @@ package core
 
 import (
 	logging "github.com/ipfs/go-log/v2"
+	"os"
 )
 
 var log = logging.Logger("slater:core")
 
 type Core struct {
+	root     string
 	store    datastore
-	host     node
+	host     *node
 	devices  []string
 	sessions map[string]session
 	Input    chan any
 	Output   chan any
 }
 
-func Start() Core {
+func Start(rootPath string) Core {
 	logging.SetLogLevel("slater:core", "debug")
 
+	if err := os.MkdirAll(rootPath, 0700); err != nil {
+		log.Panic(err)
+	}
+
 	core := Core{
+		root:     rootPath,
 		devices:  make([]string, 0),
 		sessions: make(map[string]session),
-		Input:    make(chan any),
-		Output:   make(chan any),
+		Input:    make(chan any, 1),
+		Output:   make(chan any, 1),
 	}
 
 	go core.Run()
@@ -51,6 +58,9 @@ func (core *Core) Run() {
 				message := msg.Message
 				go core.handleUIMessage(session, message)
 			}
+
+		default:
+			continue
 		}
 	}
 }
@@ -73,6 +83,10 @@ type OutputUIMessage struct {
 	Message message
 }
 
+type OutputConnectedOtherDevice struct {
+	device string
+}
+
 func (core *Core) connect(sid string) {
 	session := newSession(sid)
 	core.sessions[sid] = session
@@ -92,7 +106,7 @@ func (core *Core) connect(sid string) {
 	core.store = store
 	core.host = host
 
-	go core.handleNet(host)
+	core.handleNet()
 }
 
 func (core *Core) resumeSession(sid string) {
@@ -119,7 +133,7 @@ func (core *Core) resumeSession(sid string) {
 }
 
 func (core *Core) handleUIMessage(sid string, msg message) {
-	log.Debugf("message from session %v:\n%v", sid, msg)
+	//log.Debugf("message from session %v:\n%v", sid, msg)
 
 	session, there := core.sessions[sid]
 
@@ -146,39 +160,46 @@ func (core *Core) handleUIMessage(sid string, msg message) {
 	}
 }
 
-func (core *Core) handleNet(peer node) {
+func (core *Core) handleNet() {
 	for {
-		msg := <-peer.output
+		msg := <-core.host.output
 
 		msg["recv"] = timestamp()
 
+		//log.Debugf("message: %v", msg)
+
 		slateNameEntry, exists := msg["slate"]
 		if !exists {
+			log.Debug("message missing slate")
 			continue // ignore. TODO consider bad behavior
 		}
 
 		slateName, ok := slateNameEntry.(string)
 		if !ok {
+			log.Debug("slate not a string??")
 			continue // ignore. TODO consider bad behavior
 		}
 
 		kindEntry, exists := msg["kind"]
 		if !exists {
+			log.Debug("message missing kind")
 			continue // ignore
 		}
 
 		kind, ok := kindEntry.(string)
 		if !ok {
+			log.Debug("message kind not a string??")
 			continue // ignore
 		}
 
 		if kind == "signet" {
-			log.Debug("replying with signet")
-			peer.send(peer.discoveryKey, message{
+			core.host.send(core.host.discoveryKey, message{
 				"slate":  "setup",
 				"kind":   "signet",
-				"signet": peer.signet,
+				"signet": core.host.signet,
 			})
+
+			core.Output <- OutputConnectedOtherDevice{device: msg["device"].(string)}
 		}
 
 		for _, session := range core.sessions {

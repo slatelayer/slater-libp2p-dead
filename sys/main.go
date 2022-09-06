@@ -1,6 +1,9 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+
 	logging "github.com/ipfs/go-log/v2"
 
 	Bridge "github.com/yeahcorey/slater/bridge"
@@ -14,8 +17,20 @@ func init() {
 }
 
 func main() {
+	var rootPath string
+
+	if len(os.Args) > 1 {
+		alt := os.Args[1] // alternate root, to run 2 instances for testing
+		if alt != "" {
+			rootPath = alt
+		}
+	} else {
+		home, _ := os.UserHomeDir()
+		rootPath = filepath.Join(home, ".slater")
+	}
+
 	bridge := Bridge.Start()
-	core := Core.Start()
+	core := Core.Start(rootPath)
 
 	for {
 		select {

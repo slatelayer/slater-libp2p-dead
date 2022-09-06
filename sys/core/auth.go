@@ -53,7 +53,8 @@ const (
 	WORDS            = 6
 	DIGITS           = 4
 	DISCOVERY_PREFIX = "slater"
-	HASHES           = "h"
+	SALT             = "salt"
+	HASH             = "hash"
 
 	ARGON_TIME   = 1
 	ARGON_MEM    = 64 * 1024
@@ -91,18 +92,18 @@ func discoveryKey(parts ...string) string {
 	return hex.EncodeToString(h[:])
 }
 
-func createMasterKey(sessionID, phrase, pin string) string {
-	salt, _ := createSalt()
+func createMasterKey(rootPath, sessionID, phrase, pin string) string {
+	salt, _ := createSalt(rootPath, sessionID)
 	k := stretch(salt, sessionID, phrase, pin)
 	hash := blake2b.Sum256(k)
 	s := hex.EncodeToString(hash[:])
-	path := filepath.Join(home, ROOT, HASHES)
+	path := filepath.Join(rootPath, sessionID, HASH)
 	ioutil.WriteFile(path, []byte(s), 0600)
 	return string(k)
 }
 
-func getMasterKey(sessionID, phrase, pin string) (string, error) {
-	salt, err := getSalt()
+func getMasterKey(rootPath, sessionID, phrase, pin string) (string, error) {
+	salt, err := getSalt(rootPath, sessionID)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) { // TODO any other case to consider?
 			//☠️ Oh, look: you deleted your salt file.
@@ -116,7 +117,7 @@ func getMasterKey(sessionID, phrase, pin string) (string, error) {
 	}
 	k := stretch(salt, sessionID, phrase, pin)
 	hash := blake2b.Sum256(k)
-	path := filepath.Join(home, ROOT, HASHES)
+	path := filepath.Join(rootPath, sessionID, HASH)
 	s := hex.EncodeToString(hash[:])
 	savedHash, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -162,15 +163,22 @@ func stretch(salt []byte, things ...string) []byte {
 	return argon2.IDKey([]byte(s), salt, ARGON_TIME, ARGON_MEM, threads, ARGON_KEYLEN)
 }
 
-func createSalt() (salt []byte, err error) {
-	path := filepath.Join(home, ROOT, "salt")
+func createSalt(rootPath, sessionID string) (salt []byte, err error) {
+	dpath := filepath.Join(rootPath, sessionID)
+	fpath := filepath.Join(dpath, SALT)
+	if err = os.MkdirAll(dpath, 0700); err != nil {
+		return nil, err
+	}
 	salt = frand.Bytes(16)
-	err = ioutil.WriteFile(path, salt, 0600)
+	err = ioutil.WriteFile(fpath, salt, 0600)
+	if err != nil {
+		return nil, err
+	}
 	return
 }
 
-func getSalt() (salt []byte, err error) {
-	path := filepath.Join(home, ROOT, "salt")
+func getSalt(rootPath, sessionID string) (salt []byte, err error) {
+	path := filepath.Join(rootPath, sessionID, SALT)
 	salt, err = ioutil.ReadFile(path)
 	return
 }

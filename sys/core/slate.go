@@ -44,6 +44,7 @@ func (ephem *ephemeralSlate) id() string {
 }
 
 func (ephem *ephemeralSlate) write(msg message) (int, error) {
+	//log.Debugf("writing message: %v", msg)
 	count := ephem.count()
 
 	kind, hasKind := msg["kind"]

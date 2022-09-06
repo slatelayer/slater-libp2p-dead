@@ -1,6 +1,6 @@
 package core
 
-func setupDevice(core *Core, feed slate, say func(...string)) (datastore, node) {
+func setupDevice(core *Core, feed slate, say func(...string)) (datastore, *node) {
 	say("Awesome, let's set up this device.")
 
 	sessionName := <-promptSessionName(feed)
