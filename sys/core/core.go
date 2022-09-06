@@ -28,8 +28,8 @@ func Start(rootPath string) Core {
 		root:     rootPath,
 		devices:  make([]string, 0),
 		sessions: make(map[string]session),
-		Input:    make(chan any, 1),
-		Output:   make(chan any, 1),
+		Input:    make(chan any, 128),
+		Output:   make(chan any, 128),
 	}
 
 	go core.Run()
@@ -58,9 +58,6 @@ func (core *Core) Run() {
 				message := msg.Message
 				go core.handleUIMessage(session, message)
 			}
-
-		default:
-			continue
 		}
 	}
 }

@@ -28,6 +28,15 @@ func TestSetupAndDiscovery(t *testing.T) {
 	pin := ""
 	finished := false
 
+	send := func(c chan (any), thing any) {
+		select {
+		case c <- thing:
+			return
+		default:
+			return
+		}
+	}
+
 	for !finished {
 		coreMsg := <-core1.Output
 
@@ -56,7 +65,7 @@ func TestSetupAndDiscovery(t *testing.T) {
 					prompt := m["prompt"].(message)
 					event := prompt["event"]
 					kind := prompt["kind"]
-					core1.Input <- InputUIMessage{Session: "test1", Message: message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}}
+					send(core1.Input, InputUIMessage{Session: "test1", Message: message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}})
 					continue
 				}
 
@@ -64,7 +73,7 @@ func TestSetupAndDiscovery(t *testing.T) {
 					prompt := m["prompt"].(message)
 					event := prompt["event"]
 					kind := prompt["kind"]
-					core1.Input <- InputUIMessage{Session: "test1", Message: message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}}
+					send(core1.Input, InputUIMessage{Session: "test1", Message: message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}})
 					continue
 				}
 
@@ -73,7 +82,7 @@ func TestSetupAndDiscovery(t *testing.T) {
 					prompt := m["prompt"].(message)
 					event := prompt["event"]
 					kind := prompt["kind"]
-					core1.Input <- InputUIMessage{Session: "test1", Message: message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}}
+					send(core1.Input, InputUIMessage{Session: "test1", Message: message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}})
 					continue
 				}
 
@@ -82,7 +91,7 @@ func TestSetupAndDiscovery(t *testing.T) {
 					prompt := m["prompt"].(message)
 					event := prompt["event"]
 					kind := prompt["kind"]
-					core1.Input <- InputUIMessage{Session: "test1", Message: message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}}
+					send(core1.Input, InputUIMessage{Session: "test1", Message: message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}})
 					continue
 				}
 
@@ -91,7 +100,7 @@ func TestSetupAndDiscovery(t *testing.T) {
 					prompt := m["prompt"].(message)
 					event := prompt["event"]
 					kind := prompt["kind"]
-					core1.Input <- InputUIMessage{Session: "test1", Message: message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}}
+					send(core1.Input, InputUIMessage{Session: "test1", Message: message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}})
 					continue
 				}
 
@@ -99,7 +108,7 @@ func TestSetupAndDiscovery(t *testing.T) {
 					prompt := m["prompt"].(message)
 					event := prompt["event"]
 					kind := prompt["kind"]
-					core1.Input <- InputUIMessage{Session: "test1", Message: message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}}
+					send(core1.Input, InputUIMessage{Session: "test1", Message: message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}})
 					continue
 				}
 
@@ -126,7 +135,6 @@ func TestSetupAndDiscovery(t *testing.T) {
 			t.Fatalf("failed to connect after %d seconds", timeout)
 
 		case coreMsg := <-core2.Output:
-
 			switch coreMsg.(type) {
 
 			case OutputConnectedOtherDevice:
@@ -158,7 +166,7 @@ func TestSetupAndDiscovery(t *testing.T) {
 						prompt := m["prompt"].(message)
 						event := prompt["event"]
 						kind := prompt["kind"]
-						core2.Input <- InputUIMessage{Session: "test2", Message: message{"kind": "msg", "msg": map[string]any{"choice": float64(1), "event": event, "kind": kind, "slate": "setup"}}}
+						send(core2.Input, InputUIMessage{Session: "test2", Message: message{"kind": "msg", "msg": map[string]any{"choice": float64(1), "event": event, "kind": kind, "slate": "setup"}}})
 						continue
 					}
 
@@ -166,7 +174,7 @@ func TestSetupAndDiscovery(t *testing.T) {
 						prompt := m["prompt"].(message)
 						event := prompt["event"]
 						kind := prompt["kind"]
-						core2.Input <- InputUIMessage{Session: "test2", Message: message{"kind": "msg", "msg": map[string]any{"body": sessionName, "event": event, "kind": kind, "slate": "setup"}}}
+						send(core2.Input, InputUIMessage{Session: "test2", Message: message{"kind": "msg", "msg": map[string]any{"body": sessionName, "event": event, "kind": kind, "slate": "setup"}}})
 						continue
 					}
 
@@ -174,7 +182,7 @@ func TestSetupAndDiscovery(t *testing.T) {
 						prompt := m["prompt"].(message)
 						event := prompt["event"]
 						kind := prompt["kind"]
-						core2.Input <- InputUIMessage{Session: "test2", Message: message{"kind": "msg", "msg": map[string]any{"secretText": passphrase, "event": event, "kind": kind, "slate": "setup"}}}
+						send(core2.Input, InputUIMessage{Session: "test2", Message: message{"kind": "msg", "msg": map[string]any{"secretText": passphrase, "event": event, "kind": kind, "slate": "setup"}}})
 						continue
 					}
 
@@ -182,7 +190,7 @@ func TestSetupAndDiscovery(t *testing.T) {
 						prompt := m["prompt"].(message)
 						event := prompt["event"]
 						kind := prompt["kind"]
-						core2.Input <- InputUIMessage{Session: "test2", Message: message{"kind": "msg", "msg": map[string]any{"secretText": pin, "event": event, "kind": kind, "slate": "setup"}}}
+						send(core2.Input, InputUIMessage{Session: "test2", Message: message{"kind": "msg", "msg": map[string]any{"secretText": pin, "event": event, "kind": kind, "slate": "setup"}}})
 						continue
 					}
 
