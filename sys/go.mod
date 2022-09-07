@@ -1,4 +1,4 @@
-module github.com/yeahcorey/slater
+module github.com/mfslater/slater
 
 go 1.18
 
