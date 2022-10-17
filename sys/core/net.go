@@ -8,21 +8,25 @@ import (
 	ds "github.com/ipfs/go-datastore"
 	logging "github.com/ipfs/go-log/v2"
 	libp2p "github.com/libp2p/go-libp2p"
-	connmgr "github.com/libp2p/go-libp2p-connmgr"
-	"github.com/libp2p/go-libp2p-core/crypto"
-	host "github.com/libp2p/go-libp2p-core/host"
-	peer "github.com/libp2p/go-libp2p-core/peer"
-	routing "github.com/libp2p/go-libp2p-core/routing"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	dual "github.com/libp2p/go-libp2p-kad-dht/dual"
-	noise "github.com/libp2p/go-libp2p-noise"
-	pstore "github.com/libp2p/go-libp2p-peerstore/pstoreds"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	record "github.com/libp2p/go-libp2p-record"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	host "github.com/libp2p/go-libp2p/core/host"
+	peer "github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/routing"
+	//routing "github.com/libp2p/go-libp2p/core/routing"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	discoveryRouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
+	pstore "github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoreds"
+	connmgr "github.com/libp2p/go-libp2p/p2p/net/connmgr"
+	noise "github.com/libp2p/go-libp2p/p2p/security/noise"
 	quic "github.com/libp2p/go-libp2p/p2p/transport/quic"
 	tcp "github.com/libp2p/go-libp2p/p2p/transport/tcp"
+
+	"slater/core/msg"
+	"slater/core/store"
 )
 
 const DiscoveryServiceTag = "slater" // TODO version
@@ -33,7 +37,7 @@ type node struct {
 	psub     *pubsub.PubSub
 	ctx      context.Context
 	channels map[string]channel
-	output   chan message
+	output   chan *msg.Message
 
 	discoveryKey string
 	signet       []byte
@@ -48,7 +52,7 @@ func (n node) close() error {
 	return n.host.Close()
 }
 
-func startNet(key crypto.PrivKey, store datastore) (*node, error) {
+func startNet(key crypto.PrivKey, db store.Store) (*node, error) {
 	background := context.Background()
 	var ddht *dual.DHT
 	connectionManager, err := connmgr.NewConnManager(
@@ -67,7 +71,7 @@ func startNet(key crypto.PrivKey, store datastore) (*node, error) {
 
 	bootstrapNodes, _ := defaultBootstrapPeers()
 
-	pStore, err := pstore.NewPeerstore(background, store.store, pstore.DefaultOpts())
+	pStore, err := pstore.NewPeerstore(background, db.Store, pstore.DefaultOpts())
 	if err != nil {
 		log.Panic(err)
 	}
@@ -87,8 +91,8 @@ func startNet(key crypto.PrivKey, store datastore) (*node, error) {
 			libp2p.Transport(quic.NewTransport),
 		),
 		libp2p.Routing(func(host host.Host) (routing.PeerRouting, error) {
-			ddht, err = newDHT(background, host, store.store, bootstrapNodes)
-			return ddht, err
+			ddht, err = newDHT(background, host, db.Store, bootstrapNodes)
+			return routing.PeerRouting(ddht), err
 		}),
 		libp2p.ConnectionManager(connectionManager),
 		libp2p.NATPortMap(),
@@ -117,7 +121,7 @@ func startNet(key crypto.PrivKey, store datastore) (*node, error) {
 		psub:     psub,
 		ctx:      background,
 		channels: make(map[string]channel),
-		output:   make(chan message),
+		output:   make(chan *msg.Message),
 	}
 
 	n.bootstrap(bootstrapNodes)
@@ -129,9 +133,9 @@ func startNet(key crypto.PrivKey, store datastore) (*node, error) {
 	return &n, nil
 }
 
-func newDHT(ctx context.Context, host host.Host, store ds.Batching, bootstrapNodes []peer.AddrInfo) (*dual.DHT, error) {
+func newDHT(ctx context.Context, host host.Host, dstore ds.Batching, bootstrapNodes []peer.AddrInfo) (*dual.DHT, error) {
 	dhtOpts := []dual.Option{
-		dual.DHTOption(dht.Datastore(store)),
+		dual.DHTOption(dht.Datastore(dstore)),
 		dual.DHTOption(dht.NamespacedValidator("pk", record.PublicKeyValidator{})),
 		dual.DHTOption(dht.Concurrency(10)),
 		dual.DHTOption(dht.BootstrapPeers(bootstrapNodes...)),
@@ -219,8 +223,8 @@ func (n *node) join(k string, f pubsub.ValidatorEx) {
 	go run(n, sub)
 }
 
-func (n *node) send(topic string, msg message) {
-	bytes, err := encode(msg)
+func (n *node) send(topic string, m *msg.Message) {
+	bytes, err := msg.Encode(m)
 	if err != nil {
 		log.Error(err)
 		return
@@ -231,7 +235,7 @@ func (n *node) send(topic string, msg message) {
 
 func run(n *node, sub *pubsub.Subscription) {
 	for {
-		msg, err := sub.Next(n.ctx)
+		pmsg, err := sub.Next(n.ctx)
 
 		if err != nil {
 			log.Error("NET shutting down, cuz", err)
@@ -239,17 +243,17 @@ func run(n *node, sub *pubsub.Subscription) {
 			return
 		}
 
-		if msg.ReceivedFrom == n.host.ID() {
+		if pmsg.ReceivedFrom == n.host.ID() {
 			continue
 		}
 
-		m, err := decode(msg.Data)
+		m, err := msg.Decode(pmsg.Data)
 		if err != nil {
 			log.Error("NET", err)
 			continue
 		}
 
-		m["device"] = msg.ReceivedFrom.Pretty()
+		m.Device = pmsg.ReceivedFrom.Pretty()
 
 		n.output <- m
 	}

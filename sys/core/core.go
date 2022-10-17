@@ -1,15 +1,20 @@
 package core
 
 import (
-	logging "github.com/ipfs/go-log/v2"
 	"os"
+
+	logging "github.com/ipfs/go-log/v2"
+
+	"slater/core/msg"
+	"slater/core/slate"
+	"slater/core/store"
 )
 
 var log = logging.Logger("slater:core")
 
 type Core struct {
 	root     string
-	store    datastore
+	store    store.Store
 	host     *node
 	devices  []string
 	sessions map[string]session
@@ -72,12 +77,12 @@ type InputUISessionResume struct {
 
 type InputUIMessage struct {
 	Session string
-	Message message
+	Message *msg.Message
 }
 
 type OutputUIMessage struct {
 	Session string
-	Message message
+	Message *msg.Message
 }
 
 type OutputConnectedOtherDevice struct {
@@ -95,8 +100,8 @@ func (core *Core) connect(sid string) {
 
 	feed := session.view.slates[setup]
 
-	feed.on(ALL, func(_ slate, msg message, _ int) {
-		core.sendMessage(sid, msg)
+	feed.On(slate.ALL, func(m *msg.Message) {
+		core.sendMessage(sid, m)
 	})
 
 	store, host := runSetup(core, feed)
@@ -120,7 +125,7 @@ func (core *Core) resumeSession(sid string) {
 	s := session.view.slates[setup]
 
 	// send everything on slate setup TODO PAGINATION!
-	msgs, err := s.getRange(0, -1)
+	msgs, err := s.GetRange(0, -1)
 	if err != nil {
 		log.Debug(err)
 	}
@@ -129,80 +134,72 @@ func (core *Core) resumeSession(sid string) {
 	}
 }
 
-func (core *Core) handleUIMessage(sid string, msg message) {
-	//log.Debugf("message from session %v:\n%v", sid, msg)
+func (core *Core) handleUIMessage(sid string, m *msg.Message) {
+	//log.Debugf("message from session %v:\n%v", sid, m)
 
 	session, there := core.sessions[sid]
 
 	if !there {
-		log.Debugf("discarded uiMessage from uninitialized session!")
+		log.Debug("discarded uiMessage from uninitialized session!")
 		return
 	}
 
-	kind := msg["kind"]
-	switch kind {
+	switch m.Kind {
 	case "msg":
-		m := msg["msg"].(map[string]any)
+		content := m.Content
 
-		m["sent"] = timestamp()
-
-		slateName := m["slate"].(string)
+		slateField, there := content["slate"]
+		if !there {
+			log.Debug("missing slate field")
+			return
+		}
+		slateName, ok := slateField.(string)
+		if !ok {
+			log.Debug("bad slate field")
+			return
+		}
 
 		slate, there := session.view.slates[slateName]
 		if there {
-			slate.write(m)
+			slate.Write(m)
 		} else {
-			log.Debugf("failed to write to slate %s", slate)
+			log.Debugf("failed write to missing slate %s", slateName)
 		}
 	}
 }
 
 func (core *Core) handleNet() {
 	for {
-		msg := <-core.host.output
+		m := <-core.host.output
+		content := m.Content
 
-		msg["recv"] = timestamp()
-
-		//log.Debugf("message: %v", msg)
-
-		slateNameEntry, exists := msg["slate"]
-		if !exists {
-			log.Debug("message missing slate")
-			continue // ignore. TODO consider bad behavior
+		slateField, there := content["slate"]
+		if !there {
+			log.Debug("missing slate field")
+			continue
 		}
-
-		slateName, ok := slateNameEntry.(string)
+		slateName, ok := slateField.(string)
 		if !ok {
-			log.Debug("slate not a string??")
-			continue // ignore. TODO consider bad behavior
+			log.Debug("bad slate field")
+			continue
 		}
 
-		kindEntry, exists := msg["kind"]
-		if !exists {
-			log.Debug("message missing kind")
-			continue // ignore
-		}
-
-		kind, ok := kindEntry.(string)
-		if !ok {
-			log.Debug("message kind not a string??")
-			continue // ignore
-		}
-
-		if kind == "signet" {
-			core.host.send(core.host.discoveryKey, message{
-				"slate":  "setup",
-				"kind":   "signet",
-				"signet": core.host.signet,
+		if m.Kind == "signet" {
+			core.host.send(core.host.discoveryKey, &msg.Message{
+				Slate: "setup",
+				Kind:  "signet",
+				Content: map[string]any{
+					"signet": core.host.signet,
+				},
 			})
 
-			core.Output <- OutputConnectedOtherDevice{device: msg["device"].(string)}
+			core.Output <- OutputConnectedOtherDevice{device: m.Device}
 		}
 
 		for _, session := range core.sessions {
-			slate, there := session.view.slates[slateName]
+			sl8, there := session.view.slates[slateName]
 			if there {
-				slate.write(msg)
+				sl8.Write(m)
 				break
 			} else {
 				continue
@@ -211,55 +208,21 @@ func (core *Core) handleNet() {
 	}
 }
 
-func (core *Core) sendMessage(sid string, msg message) {
-	cmd := message{"kind": "msg", "msg": msg}
-	core.Output <- OutputUIMessage{sid, cmd}
-}
-
-func (core *Core) sendText(sid string, slate string, text string) {
-	core.sendTextFrom(sid, slate, "system", text)
-}
-
-func (core *Core) sendTextFrom(sid string, slate string, author string, text string) {
-	msg := message{
-		"slate":  slate,
-		"author": author,
-		"kind":   "text",
-		"body":   text,
-		"sent":   timestamp(),
-	}
-	cmd := message{"kind": "msg", "msg": msg}
-	core.Output <- OutputUIMessage{sid, cmd}
-}
-
-func (core *Core) sendWeb(sid string, slate string, title string, url string) {
-	core.sendWebFrom(sid, slate, "system", title, url)
-}
-
-func (core *Core) sendWebFrom(sid string, slate string, author string, title string, url string) {
-	msg := message{
-		"slate":  slate,
-		"author": author,
-		"kind":   "web",
-		"title":  title,
-		"body":   url,
-		"sent":   timestamp(),
-	}
-	cmd := message{"kind": "msg", "msg": msg}
-	core.Output <- OutputUIMessage{sid, cmd}
+func (core *Core) sendMessage(sid string, m *msg.Message) {
+	core.Output <- OutputUIMessage{sid, m}
 }
 
 func (core *Core) sendSessionID(sid string) {
-	cmd := message{"kind": "session", "session": sid}
-	core.Output <- OutputUIMessage{sid, cmd}
+	m := msg.Message{Kind: "session", Content: map[string]any{"session": sid}}
+	core.Output <- OutputUIMessage{sid, &m}
 }
 
-func (core *Core) sendAddSlate(sid string, id string) {
-	cmd := message{"kind": "slate", "session": sid, "slate": id}
-	core.Output <- OutputUIMessage{sid, cmd}
+func (core *Core) sendAddSlate(sid string, slate string) {
+	m := msg.Message{Kind: "slate", Content: map[string]any{"slate": slate}}
+	core.Output <- OutputUIMessage{sid, &m}
 }
 
-func (core *Core) sendPage(sid string, page []message) {
-	cmd := message{"kind": "page", "session": sid, "page": page}
-	core.Output <- OutputUIMessage{sid, cmd}
+func (core *Core) sendPage(sid string, page []*msg.Message) {
+	m := msg.Message{Kind: "page", Content: map[string]any{"page": page}}
+	core.Output <- OutputUIMessage{sid, &m}
 }

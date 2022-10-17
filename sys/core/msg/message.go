@@ -1,27 +1,36 @@
-package core
+package msg
 
 import (
 	cbor "github.com/fxamacker/cbor/v2"
 	"time"
 )
 
-// NOTE: `message` will be strongly-typed and versioned once design stabilizes more...
-
-type message map[string]any
+type Message struct {
+	Slate   string
+	User    string
+	Device  string
+	Seq     uint64
+	Sent    int64
+	Prev    string
+	Next    string
+	Kind    string
+	Event   string
+	Content map[string]any
+}
 
 // Using fxmacker's defaults for now...
 // (there was something I wanted to configure later on, but can't remember what right now...)
 
-func encode(msg message) ([]byte, error) {
-	b, err := cbor.Marshal(msg)
+func Encode(m *Message) ([]byte, error) {
+	b, err := cbor.Marshal(m)
 	if err != nil {
 		return nil, err
 	}
 	return b, nil
 }
 
-func decode(b []byte) (message, error) {
-	m := make(message)
+func Decode(b []byte) (*Message, error) {
+	m := new(Message)
 	err := cbor.Unmarshal(b, &m)
 	if err != nil {
 		return m, err
@@ -29,6 +38,6 @@ func decode(b []byte) (message, error) {
 	return m, nil
 }
 
-func timestamp() int64 {
+func Timestamp() int64 {
 	return time.Now().UnixMilli()
 }

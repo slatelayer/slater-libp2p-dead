@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"slater/core/msg"
 )
 
 func TestSetupAndDiscovery(t *testing.T) {
@@ -42,15 +44,15 @@ func TestSetupAndDiscovery(t *testing.T) {
 
 		switch coreMsg.(type) {
 		case OutputUIMessage:
-			msg := coreMsg.(OutputUIMessage)
-			inner := msg.Message
+			output := coreMsg.(OutputUIMessage)
+			inner := output.Message
 
 			mi, there := inner["msg"]
 			if !there {
 				continue
 			}
 
-			m := mi.(message)
+			m := mi.(msg.Message)
 
 			switch m["kind"] {
 			case "text", "secretText":
@@ -62,53 +64,53 @@ func TestSetupAndDiscovery(t *testing.T) {
 				body := bodyField.(string)
 
 				if strings.Contains(body, "new user") {
-					prompt := m["prompt"].(message)
+					prompt := m["prompt"].(msg.Message)
 					event := prompt["event"]
 					kind := prompt["kind"]
-					send(core1.Input, InputUIMessage{Session: "test1", Message: message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}})
+					send(core1.Input, InputUIMessage{Session: "test1", Message: msg.Message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}})
 					continue
 				}
 
 				if strings.Contains(body, "you ready") {
-					prompt := m["prompt"].(message)
+					prompt := m["prompt"].(msg.Message)
 					event := prompt["event"]
 					kind := prompt["kind"]
-					send(core1.Input, InputUIMessage{Session: "test1", Message: message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}})
+					send(core1.Input, InputUIMessage{Session: "test1", Message: msg.Message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}})
 					continue
 				}
 
 				if strings.Contains(body, "`session name`") {
 					sessionName = m["secretText"].(string)
-					prompt := m["prompt"].(message)
+					prompt := m["prompt"].(msg.Message)
 					event := prompt["event"]
 					kind := prompt["kind"]
-					send(core1.Input, InputUIMessage{Session: "test1", Message: message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}})
+					send(core1.Input, InputUIMessage{Session: "test1", Message: msg.Message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}})
 					continue
 				}
 
 				if strings.Contains(body, "`passphrase`") {
 					passphrase = m["secretText"].(string)
-					prompt := m["prompt"].(message)
+					prompt := m["prompt"].(msg.Message)
 					event := prompt["event"]
 					kind := prompt["kind"]
-					send(core1.Input, InputUIMessage{Session: "test1", Message: message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}})
+					send(core1.Input, InputUIMessage{Session: "test1", Message: msg.Message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}})
 					continue
 				}
 
 				if strings.Contains(body, "`PIN`") {
 					pin = m["secretText"].(string)
-					prompt := m["prompt"].(message)
+					prompt := m["prompt"].(msg.Message)
 					event := prompt["event"]
 					kind := prompt["kind"]
-					send(core1.Input, InputUIMessage{Session: "test1", Message: message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}})
+					send(core1.Input, InputUIMessage{Session: "test1", Message: msg.Message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}})
 					continue
 				}
 
 				if strings.Contains(body, "finished") {
-					prompt := m["prompt"].(message)
+					prompt := m["prompt"].(msg.Message)
 					event := prompt["event"]
 					kind := prompt["kind"]
-					send(core1.Input, InputUIMessage{Session: "test1", Message: message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}})
+					send(core1.Input, InputUIMessage{Session: "test1", Message: msg.Message{"kind": "msg", "msg": map[string]any{"choice": float64(0), "event": event, "kind": kind, "slate": "setup"}}})
 					continue
 				}
 
@@ -138,20 +140,20 @@ func TestSetupAndDiscovery(t *testing.T) {
 			switch coreMsg.(type) {
 
 			case OutputConnectedOtherDevice:
-				msg := coreMsg.(OutputConnectedOtherDevice)
-				t.Logf("connected to %s", msg.device)
+				m := coreMsg.(OutputConnectedOtherDevice)
+				t.Logf("connected to %s", m.device)
 				return
 
 			case OutputUIMessage:
-				msg := coreMsg.(OutputUIMessage)
-				inner := msg.Message
+				output := coreMsg.(OutputUIMessage)
+				inner := output.Message
 
 				mi, there := inner["msg"]
 				if !there {
 					continue
 				}
 
-				m := mi.(message)
+				m := mi.(msg.Message)
 
 				switch m["kind"] {
 				case "text":
@@ -163,34 +165,34 @@ func TestSetupAndDiscovery(t *testing.T) {
 					body := bodyField.(string)
 
 					if strings.Contains(body, "new user") {
-						prompt := m["prompt"].(message)
+						prompt := m["prompt"].(msg.Message)
 						event := prompt["event"]
 						kind := prompt["kind"]
-						send(core2.Input, InputUIMessage{Session: "test2", Message: message{"kind": "msg", "msg": map[string]any{"choice": float64(1), "event": event, "kind": kind, "slate": "setup"}}})
+						send(core2.Input, InputUIMessage{Session: "test2", Message: msg.Message{"kind": "msg", "msg": map[string]any{"choice": float64(1), "event": event, "kind": kind, "slate": "setup"}}})
 						continue
 					}
 
 					if strings.Contains(body, "session") {
-						prompt := m["prompt"].(message)
+						prompt := m["prompt"].(msg.Message)
 						event := prompt["event"]
 						kind := prompt["kind"]
-						send(core2.Input, InputUIMessage{Session: "test2", Message: message{"kind": "msg", "msg": map[string]any{"body": sessionName, "event": event, "kind": kind, "slate": "setup"}}})
+						send(core2.Input, InputUIMessage{Session: "test2", Message: msg.Message{"kind": "msg", "msg": map[string]any{"body": sessionName, "event": event, "kind": kind, "slate": "setup"}}})
 						continue
 					}
 
 					if strings.Contains(body, "passphrase") {
-						prompt := m["prompt"].(message)
+						prompt := m["prompt"].(msg.Message)
 						event := prompt["event"]
 						kind := prompt["kind"]
-						send(core2.Input, InputUIMessage{Session: "test2", Message: message{"kind": "msg", "msg": map[string]any{"secretText": passphrase, "event": event, "kind": kind, "slate": "setup"}}})
+						send(core2.Input, InputUIMessage{Session: "test2", Message: msg.Message{"kind": "msg", "msg": map[string]any{"secretText": passphrase, "event": event, "kind": kind, "slate": "setup"}}})
 						continue
 					}
 
 					if strings.Contains(body, "PIN") {
-						prompt := m["prompt"].(message)
+						prompt := m["prompt"].(msg.Message)
 						event := prompt["event"]
 						kind := prompt["kind"]
-						send(core2.Input, InputUIMessage{Session: "test2", Message: message{"kind": "msg", "msg": map[string]any{"secretText": pin, "event": event, "kind": kind, "slate": "setup"}}})
+						send(core2.Input, InputUIMessage{Session: "test2", Message: msg.Message{"kind": "msg", "msg": map[string]any{"secretText": pin, "event": event, "kind": kind, "slate": "setup"}}})
 						continue
 					}
 

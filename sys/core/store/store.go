@@ -1,9 +1,11 @@
-package core
+package store
 
 import (
 	"context"
 	"os"
 	"path/filepath"
+
+	logging "github.com/ipfs/go-log/v2"
 
 	ds "github.com/ipfs/go-datastore"
 	badger "github.com/textileio/go-ds-badger3"
@@ -12,21 +14,21 @@ import (
 const (
 	DB             = "db"
 	KEYBYTES       = 64
-	KEYKEY         = "k"
-	DEVICESKEY     = "d"
 	INDEXCACHESIZE = 100 << 20
 )
 
 var (
 	ErrNotFound error           = ds.ErrNotFound
 	whatever    context.Context = context.TODO()
+
+	log = logging.Logger("slater:store")
 )
 
-type datastore struct {
-	store *badger.Datastore
+type Store struct {
+	Store *badger.Datastore
 }
 
-func findStores(rootPath string) ([]string, error) {
+func FindStores(rootPath string) ([]string, error) {
 	var stores []string
 
 	dir, err := os.Open(rootPath)
@@ -42,7 +44,7 @@ func findStores(rootPath string) ([]string, error) {
 	return stores, nil
 }
 
-func openStore(rootPath, name string, key string) (datastore, error) {
+func OpenStore(rootPath, name string, key string) (Store, error) {
 	path := filepath.Join(rootPath, name, DB)
 
 	opts := badger.DefaultOptions
@@ -53,13 +55,13 @@ func openStore(rootPath, name string, key string) (datastore, error) {
 	store, err := badger.NewDatastore(path, &opts)
 
 	if err != nil {
-		return datastore{nil}, err
+		return Store{nil}, err
 	}
 
-	return datastore{store}, nil
+	return Store{store}, nil
 }
 
-func deleteStore(rootPath, name string) {
+func RemoveStore(rootPath, name string) {
 	storePath := filepath.Join(rootPath, name, DB)
 	path := filepath.Join(storePath, name)
 	err := os.RemoveAll(path)
@@ -68,16 +70,13 @@ func deleteStore(rootPath, name string) {
 	}
 }
 
-func (s datastore) put(k string, v []byte) error {
-	key := ds.NewKey(k)
-	return s.store.Put(whatever, key, v)
+func (s Store) Put(ns []string, v []byte) error {
+	key := ds.KeyWithNamespaces(ns)
+	return s.Store.Put(whatever, key, v)
 }
 
-func (s datastore) get(key string) (value []byte, err error) {
+func (s Store) Get(key string) (value []byte, err error) {
 	k := ds.NewKey(key)
-	value, err = s.store.Get(whatever, k)
-	//if err != nil {
-	//	log.Debugf("%s: %s", k, err)
-	//}
+	value, err = s.Store.Get(whatever, k)
 	return
 }

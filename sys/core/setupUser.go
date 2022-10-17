@@ -2,9 +2,12 @@ package core
 
 import (
 	"time"
+
+	"slater/core/slate"
+	"slater/core/store"
 )
 
-func setupUser(core *Core, feed slate, say func(...string)) (datastore, *node) {
+func setupUser(core *Core, feed slate.Slate, say func(...string)) (store.Store, *node) {
 	say("Alright, I will create new random credentials, and I need you to **write them down** and *put them in your wallet*.\n",
 		"So get ready to write, and make sure nobody else is looking at your screen!",
 	)
@@ -67,46 +70,46 @@ func setupUser(core *Core, feed slate, say func(...string)) (datastore, *node) {
 	return completeSetup(core, newName, newPhrase, newPin)
 }
 
-func askIfReady(feed slate) chan bool {
+func askIfReady(feed slate.Slate) chan bool {
 	return affirm(feed, "setup:ready?", "Are you ready?", "Ready!", "Not yet...")
 }
 
-func askIfReadyNow(feed slate) chan bool {
+func askIfReadyNow(feed slate.Slate) chan bool {
 	return affirm(feed, "setup:ready?", "Okay, tell me when you're ready.",
 		"Ready!", "Not yet...")
 }
 
-func proposeName(feed slate, name string) chan bool {
+func proposeName(feed slate.Slate, name string) chan bool {
 	return affirmSecret(feed, "setup:okName?", "Does this `session name` look okay to you?", name,
 		"Yes, continue", "No, make another")
 }
 
-func proposeAnotherName(feed slate, name string) chan bool {
+func proposeAnotherName(feed slate.Slate, name string) chan bool {
 	return affirmSecret(feed, "setup:okName?", "How about this one?", name,
 		"Yes, continue", "No, make another")
 }
 
-func proposePhrase(feed slate, phrase string) chan bool {
+func proposePhrase(feed slate.Slate, phrase string) chan bool {
 	return affirmSecret(feed, "setup:okPassphrase?", "Does this `passphrase` look okay to you?", phrase,
 		"Yes, continue", "No, make another")
 }
 
-func proposeAnotherPhrase(feed slate, phrase string) chan bool {
+func proposeAnotherPhrase(feed slate.Slate, phrase string) chan bool {
 	return affirmSecret(feed, "setup:okPassphrase?", "How about this one?", phrase,
 		"Yes, continue", "No, make another")
 }
 
-func proposePin(feed slate, pin string) chan bool {
+func proposePin(feed slate.Slate, pin string) chan bool {
 	return affirmSecret(feed, "setup:okPIN?", "Does this `PIN` look okay?", pin,
 		"Yes, continue", "No, make another")
 }
 
-func promptWrittenDown(feed slate) chan bool {
+func promptWrittenDown(feed slate.Slate) chan bool {
 	return affirm(feed, "setup:phraseWrittenDown?", "Tell me when you're finished writing...",
 		"Ready!", "Hold on...")
 }
 
-func promptWrittenDownAgain(feed slate) chan bool {
+func promptWrittenDownAgain(feed slate.Slate) chan bool {
 	return affirm(feed, "setup:phraseWrittenDown?", "Okay just let me know when you're ready...",
 		"Ready!", "Hold on...")
 }

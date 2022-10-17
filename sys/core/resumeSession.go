@@ -2,10 +2,14 @@ package core
 
 import (
 	"errors"
+
 	"github.com/libp2p/go-libp2p-core/crypto"
+
+	"slater/core/slate"
+	"slater/core/store"
 )
 
-func resumeSession(core *Core, feed slate, say func(...string), sessions []string) (datastore, *node) {
+func resumeSession(core *Core, feed slate.Slate, say func(...string), sessions []string) (store.Store, *node) {
 	createNew := "Create a New Session"
 	choices := append(sessions, createNew)
 	sessionName := <-chooseSession(feed, choices)
@@ -15,9 +19,9 @@ func resumeSession(core *Core, feed slate, say func(...string), sessions []strin
 	}
 
 	var passphrase, pin string
-	var store datastore
+	var db store.Store
 	var err error
-	for store.store == nil {
+	for db.Store == nil {
 		passphrase = <-promptPassphrase(feed)
 		pin = <-promptPIN(feed)
 
@@ -41,12 +45,12 @@ func resumeSession(core *Core, feed slate, say func(...string), sessions []strin
 			say("Please don't delete my files. I hope you have a full replica of your data on another device!")
 			say("If so, please make sure it's online and running session " + sessionName)
 
-			deleteStore(core.root, sessionName)
+			store.RemoveStore(core.root, sessionName)
 
 			key = createMasterKey(core.root, sessionName, passphrase, pin)
 		}
 
-		store, err = openStore(core.root, sessionName, key)
+		db, err = store.OpenStore(core.root, sessionName, key)
 
 		if err != nil {
 			if len(sessions) > 1 {
@@ -70,7 +74,7 @@ func resumeSession(core *Core, feed slate, say func(...string), sessions []strin
 		}
 	}
 
-	keyBytes, err := store.get(KEYKEY)
+	keyBytes, err := db.Get(KEYKEY)
 
 	if err != nil {
 		log.Panic(err)
@@ -82,7 +86,7 @@ func resumeSession(core *Core, feed slate, say func(...string), sessions []strin
 		log.Panic(err)
 	}
 
-	node, err := startNet(privKey, store)
+	node, err := startNet(privKey, db)
 
 	log.Debug("node: ", node.host.ID())
 
@@ -90,29 +94,29 @@ func resumeSession(core *Core, feed slate, say func(...string), sessions []strin
 		log.Panic(err)
 	}
 
-	connect(core, store, node, sessionName, passphrase, pin)
+	connect(core, db, node, sessionName, passphrase, pin)
 
-	return store, node
+	return db, node
 }
 
-func chooseSession(feed slate, sessions []string) chan string {
+func chooseSession(feed slate.Slate, sessions []string) chan string {
 	return choose(feed, "setup:sessionID", "Start a session", sessions)
 }
 
-func promptPassphrase(feed slate) chan string {
+func promptPassphrase(feed slate.Slate) chan string {
 	return promptSecret(feed, "setup:passphrase", "Enter your passphrase")
 }
 
-func promptPIN(feed slate) chan string {
+func promptPIN(feed slate.Slate) chan string {
 	return promptSecret(feed, "setup:pin", "Enter your PIN")
 }
 
-func chooseAnotherSession(feed slate) chan bool {
+func chooseAnotherSession(feed slate.Slate) chan bool {
 	return affirm(feed, "setup:chooseAnotherSession?",
 		"## Do you want to choose a different session?", "Yes", "No, let's try again")
 }
 
-func promptTryAgain(feed slate) chan bool {
+func promptTryAgain(feed slate.Slate) chan bool {
 	return affirm(feed, "setup:tryAgain?",
 		"## Do you want to try again?", "Yes", "No")
 }

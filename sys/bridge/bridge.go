@@ -10,6 +10,8 @@ import (
 	logging "github.com/ipfs/go-log/v2"
 	nanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/projectdiscovery/sslcert"
+
+	"slater/core/msg"
 )
 
 var log = logging.Logger("slater:bridge")
@@ -29,7 +31,7 @@ type Bridge struct {
 
 type InputSendMessage struct {
 	Session string
-	Message map[string]any
+	Message *msg.Message
 }
 
 type OutputSessionStart struct {
@@ -46,7 +48,7 @@ type OutputSessionQuit struct {
 
 type OutputReceivedMessage struct {
 	Session string
-	Message map[string]any
+	Message *msg.Message
 }
 
 func Start() *Bridge {
@@ -109,14 +111,14 @@ func Start() *Bridge {
 			case input := <-bridge.Input:
 				switch input.(type) {
 				case InputSendMessage:
-					msg := input.(InputSendMessage)
+					mess := input.(InputSendMessage)
 
-					sock, there := bridge.Sessions[msg.Session]
+					sock, there := bridge.Sessions[mess.Session]
 					if !there {
 						continue
 					}
 
-					err := sock.WriteJSON(msg.Message)
+					err := sock.WriteJSON(mess.Message)
 					if err != nil {
 						log.Debug(err)
 					}
@@ -141,7 +143,7 @@ func (bridge *Bridge) Session(w http.ResponseWriter, r *http.Request) {
 	var id string = ""
 
 	for {
-		mt, msg, err := sock.ReadMessage()
+		mt, mess, err := sock.ReadMessage()
 
 		if err != nil {
 			log.Debug(err)
@@ -150,15 +152,24 @@ func (bridge *Bridge) Session(w http.ResponseWriter, r *http.Request) {
 
 		switch mt {
 		case websocket.TextMessage:
-			var m map[string]any
+			var bm map[string]any
 
-			err := json.Unmarshal(msg, &m)
+			err := json.Unmarshal(mess, &bm)
 			if err != nil {
 				log.Debugf("failed to unmarshal ui input!!")
 				return
 			}
 
-			kind := m["kind"]
+			kindField, there := bm["kind"]
+			if !there {
+				log.Debugf("missing kind!")
+				return
+			}
+			kind, ok := kindField.(string)
+			if !ok {
+				log.Debugf("bad kind value!")
+				return
+			}
 
 			switch kind {
 			case "begin":
@@ -171,13 +182,32 @@ func (bridge *Bridge) Session(w http.ResponseWriter, r *http.Request) {
 				bridge.Output <- OutputSessionStart{id}
 
 			case "resume":
-				id = m["session"].(string)
-				bridge.Sessions[id] = sock
-				bridge.Output <- OutputSessionResume{id}
+				sessionField, there := bm["session"]
+				if !there {
+					log.Debug("missing session!")
+					return
+				}
+				session, ok := sessionField.(string)
+				if !ok {
+					log.Debug("bad session value!")
+					return
+				}
+				bridge.Sessions[session] = sock
+				bridge.Output <- OutputSessionResume{session}
 
 			default:
 				if id != "" {
-					bridge.Output <- OutputReceivedMessage{id, m}
+					messageField, there := bm["message"]
+					if !there {
+						log.Debug("missing message!")
+						return
+					}
+					message, ok := messageField.(msg.Message)
+					if !ok {
+						log.Debug("bad message!")
+						return
+					}
+					bridge.Output <- OutputReceivedMessage{id, &message}
 				}
 			}
 

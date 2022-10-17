@@ -36,12 +36,9 @@ ApplicationWindow {
         id: view
 
         onMessage: function (msg) {
-            var slate = msg.slate
-            var kind = msg.kind
-
             // TODO actually pass this kinda stuff over the bridge also...
             // for example, in this case we actually want to set the mode on all devices...
-            switch (kind) {
+            switch (msg.kind) {
                 case "text": {
                     switch (msg.body) {
                         case "/dark":
@@ -53,8 +50,8 @@ ApplicationWindow {
             }
 
             var msg = JSON.stringify({
-                kind: "msg",
-                msg
+                Kind: msg.kind,
+                Message: msg,
             })
             bridge.sendMessage(msg)
         }

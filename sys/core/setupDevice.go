@@ -1,6 +1,11 @@
 package core
 
-func setupDevice(core *Core, feed slate, say func(...string)) (datastore, *node) {
+import (
+	"slater/core/slate"
+	"slater/core/store"
+)
+
+func setupDevice(core *Core, feed slate.Slate, say func(...string)) (store.Store, *node) {
 	say("Awesome, let's set up this device.")
 
 	sessionName := <-promptSessionName(feed)
@@ -10,6 +15,6 @@ func setupDevice(core *Core, feed slate, say func(...string)) (datastore, *node)
 	return completeSetup(core, sessionName, passphrase, pinNumber)
 }
 
-func promptSessionName(feed slate) chan string {
+func promptSessionName(feed slate.Slate) chan string {
 	return prompt(feed, "sessionName", "Punch in your `session name`")
 }
